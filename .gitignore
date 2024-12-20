@@ -1,0 +1,4 @@
+*.spv
+*.kdev4
+.kdev4/**
+VulkanTest
