@@ -1,10 +1,10 @@
-CFLAGS = -std=c++17 -O2
-LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
+CFLAGS = -std=c++17 -g -Og
+LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lassimp
 
 .PHONY: test clean
 
-VulkanTest: main.cpp
-	g++ $(CFLAGS) -o VulkanTest main.cpp $(LDFLAGS)
+VulkanTest: main.cpp Camera.hpp Camera.cpp Mesh.cpp Vulkan.cpp Application.hpp Application.cpp importer/VRMImporter.hpp importer/VRMImporter.cpp
+	g++ $(CFLAGS) -o VulkanTest main.cpp Camera.cpp Mesh.cpp Vulkan.cpp Application.cpp importer/VRMImporter.cpp $(LDFLAGS)
 
 test: vert.spv frag.spv VulkanTest
 	./VulkanTest
