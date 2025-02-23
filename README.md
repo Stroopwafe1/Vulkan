@@ -1,6 +1,6 @@
 # Learning Vulkan
 
-Originally, this repository was follwing the [vulkan tutorial](https://vulkan-tutorial.com/Introduction) step for step.
+Originally, this repository was following the [vulkan tutorial](https://vulkan-tutorial.com/Introduction) step for step.
 
 But after having gone through it, I have diverted to doing my own thing. I'm still learning Vulkan, but more through experimentation than following tutorials
 
