@@ -4,6 +4,11 @@
 #include "../json.hpp"
 #include <iostream>
 
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#include <glm/glm.hpp>
+
 template<class T>
 struct Array {
 	T* data;
@@ -23,18 +28,34 @@ namespace VRM {
 		char* begin;
 		size_t byteLength;
 	};
+
+	struct FCNSNode {
+		glm::vec4 translation;
+		glm::vec4 scale;
+		glm::vec4 rotation;
+		int mesh;
+		int skin;
+		int firstChild;
+		int nextSibling;
+	};
 }
 
 class VRMImporter {
 public:
 	nlohmann::json header;
 	std::vector<char> buffer;
+	std::vector<VRM::FCNSNode> nodes;
 	void loadModel(const std::string& path);
+
+	void loadNodes();
 
 	template<class T>
 	Array<T> getMeshAttribute(int meshIndex, int primitiveIndex, const std::string& attribute) {
 		auto& mesh = header["meshes"][meshIndex];
 		auto& primitive = mesh["primitives"][primitiveIndex];
+		if (!primitive["attributes"].contains(attribute)) {
+			return {nullptr, 0};
+		}
 		int accessorIndex = primitive["attributes"][attribute];
 		auto& accessor = header["accessors"][accessorIndex];
 		size_t bufferViewIndex = accessor["bufferView"];

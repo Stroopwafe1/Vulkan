@@ -1,5 +1,5 @@
 CFLAGS = -std=c++17 -g -Og
-LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lassimp
+LDFLAGS = -lglfw -lvulkan -ldl -lpthread
 
 .PHONY: test clean
 

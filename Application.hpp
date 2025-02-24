@@ -22,10 +22,6 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 #include "Mesh.hpp"
 #include "Vulkan.hpp"
 
-#include <assimp/Importer.hpp>      // C++ importer interface
-#include <assimp/scene.h>           // Output data structure
-#include <assimp/postprocess.h>     // Post processing flags
-
 #include "importer/VRMImporter.hpp"
 
 #define GLM_FORCE_RADIANS
@@ -50,11 +46,9 @@ public:
 	}
 public:
 	GLFWwindow* window;
-	Assimp::Importer importer;
 	VRMImporter vrmImporter;
 	Vulkan vulkan;
 
-	//const aiScene* scene;
 	std::vector<Mesh> meshes;
 	std::vector<std::vector<uint8_t>> textureData;
 

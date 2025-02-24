@@ -1,1 +1,1 @@
-https://vulkan-tutorial.com/en/Drawing_a_triangle/Drawing/Rendering_and_presentation#page_Conclusion
+https://vulkan-tutorial.com/en/Texture_mapping/Combined_image_sampler
