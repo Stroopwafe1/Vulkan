@@ -5,7 +5,6 @@ void Application::initWindow() {
 	glfwInit();
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
 
 	window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 	glfwSetWindowUserPointer(window, this);
@@ -29,6 +28,7 @@ void Application::initVulkan() {
 	createUniformBuffers();
 	createMaterialBuffers();
 	createAnimBuffers();
+	Mesh::createBoneBuffers(vrmImporter.getBoneCount(), vulkan);
 	createDescriptorPool();
 	createDescriptorSets();
 }
@@ -42,6 +42,7 @@ void Application::mainLoop() {
 		glfwPollEvents();
 		updateCamera();
 		updateUniformBuffers(vulkan.currentFrame);
+		updateBoneTransforms(vulkan.currentFrame);
 		vulkan.drawFrame(this);
 	}
 
@@ -68,6 +69,11 @@ void Application::updateUniformBuffers(uint32_t currentImage) {
 	for (auto& mesh : meshes) {
 		mesh.updateUniformBuffer(camera, currentImage);
 	}
+}
+
+void Application::updateBoneTransforms(uint32_t currentImage) {
+	Array<glm::mat4> boneTransforms = vrmImporter.getBoneTransforms();
+	Mesh::updateBoneBuffers(boneTransforms.data, boneTransforms.count, currentImage);
 }
 
 void Application::MovementHandler() {
@@ -106,6 +112,14 @@ void Application::MovementHandler() {
 		if (camera.m_Yaw >= 360)
 			camera.m_Yaw = 0;
 	}
+
+	// if (_keystates[int('S')] && _keystates[340]) {
+	// 	std::cout << "Camera: " << std::endl;
+	// 	std::cout << "\tPosition: " << camera.m_Position.x << ", " << camera.m_Position.y << ", " << camera.m_Position.z << std::endl;
+	// 	std::cout << "\tFront: " << camera.m_Front.x << ", " << camera.m_Front.y << ", " << camera.m_Front.z << std::endl;
+	// 	std::cout << "\tYaw: " << camera.m_Yaw << std::endl;
+	// 	std::cout << "\tPitch: " << camera.m_Pitch << std::endl;
+	// }
 }
 
 void Application::loadScene() {
@@ -226,6 +240,7 @@ void Application::cleanup() {
 	for (auto& mesh : meshes) {
 		mesh.cleanup(vulkan);
 	}
+	Mesh::cleanup_s(vulkan);
 	vulkan.cleanup(vrmImporter.getTextureCount());
 	glfwDestroyWindow(window);
 	glfwTerminate();

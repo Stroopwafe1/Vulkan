@@ -38,7 +38,7 @@ void Mesh::createDescriptorSets(Vulkan& vulkan) {
 		bufferInfo.offset = 0;
 		bufferInfo.range = sizeof(UniformBufferObject);
 
-		std::vector<VkWriteDescriptorSet> descriptorWrites(4);
+		std::vector<VkWriteDescriptorSet> descriptorWrites(5);
 
 		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		descriptorWrites[0].dstSet = descriptorSets[i];
@@ -98,13 +98,26 @@ void Mesh::createDescriptorSets(Vulkan& vulkan) {
 		descriptorWrites[3].descriptorCount = 1;
 		descriptorWrites[3].pBufferInfo = &animBufferInfo;
 
+		VkDescriptorBufferInfo boneBufferInfo{};
+		boneBufferInfo.offset = 0;
+		boneBufferInfo.buffer = Mesh::boneBuffers[i];
+		boneBufferInfo.range = sizeof(glm::mat4) * Mesh::boneCount;
+
+		descriptorWrites[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[4].dstSet = descriptorSets[i];
+		descriptorWrites[4].dstBinding = 4;
+		descriptorWrites[4].dstArrayElement = 0;
+		descriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		descriptorWrites[4].descriptorCount = 1;
+		descriptorWrites[4].pBufferInfo = &boneBufferInfo;
+
 		vkUpdateDescriptorSets(vulkan.device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 	}
 }
 
 
 void Mesh::createDescriptorPool(Vulkan& vulkan) {
-	std::array<VkDescriptorPoolSize, 4> poolSizes{};
+	std::array<VkDescriptorPoolSize, 5> poolSizes{};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -113,6 +126,8 @@ void Mesh::createDescriptorPool(Vulkan& vulkan) {
 	poolSizes[2].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 	poolSizes[3].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	poolSizes[3].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	poolSizes[4].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	poolSizes[4].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
 	VkDescriptorPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -257,4 +272,30 @@ void Mesh::cleanup(Vulkan& vulkan) {
 	vkDestroyBuffer(vulkan.device, vertexBuffer, nullptr);
 	vkFreeMemory(vulkan.device, vertexBufferMemory, nullptr);
 
+}
+
+void Mesh::createBoneBuffers(size_t count, Vulkan& vulkan) {
+	VkDeviceSize bufferSize = sizeof(glm::mat4) * count;
+	Mesh::boneCount = count;
+
+	Mesh::boneBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+	Mesh::boneBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+	Mesh::boneBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		vulkan.createBuffer(bufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, Mesh::boneBuffers[i], Mesh::boneBuffersMemory[i]);
+
+		vkMapMemory(vulkan.device, Mesh::boneBuffersMemory[i], 0, bufferSize, 0, &Mesh::boneBuffersMapped[i]);
+	}
+}
+
+void Mesh::updateBoneBuffers(glm::mat4* data, size_t count, uint32_t currentImage) {
+	memcpy(Mesh::boneBuffersMapped[currentImage], data, sizeof(glm::mat4) * count);
+}
+
+void Mesh::cleanup_s(Vulkan& vulkan) {
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		vkDestroyBuffer(vulkan.device, Mesh::boneBuffers[i], nullptr);
+		vkFreeMemory(vulkan.device, Mesh::boneBuffersMemory[i], nullptr);
+	}
 }

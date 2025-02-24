@@ -639,7 +639,14 @@ void Vulkan::createDescriptorSetLayout(size_t numTextures) {
 	animLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 	animLayoutBinding.pImmutableSamplers = nullptr; // Optional
 
-	std::array<VkDescriptorSetLayoutBinding, 4> bindings = {uboLayoutBinding, samplerLayoutBinding, materialLayoutBinding, animLayoutBinding};
+	VkDescriptorSetLayoutBinding boneLayoutBinding{};
+	boneLayoutBinding.binding = 4;
+	boneLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	boneLayoutBinding.descriptorCount = 1;
+	boneLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	boneLayoutBinding.pImmutableSamplers = nullptr; // Optional
+
+	std::array<VkDescriptorSetLayoutBinding, 5> bindings = {uboLayoutBinding, samplerLayoutBinding, materialLayoutBinding, animLayoutBinding, boneLayoutBinding};
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;

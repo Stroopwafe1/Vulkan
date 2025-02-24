@@ -22,6 +22,10 @@ public:
 	void createMaterialBuffer(Vulkan& vulkan);
 	void cleanup(Vulkan& vulkan);
 
+	static void createBoneBuffers(size_t count, Vulkan& vulkan);
+	static void updateBoneBuffers(glm::mat4* data, size_t count, uint32_t currentImage);
+	static void cleanup_s(Vulkan& vulkan);
+
 public:
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
@@ -41,6 +45,12 @@ public:
 	std::vector<VkDeviceMemory> materialBuffersMemory;
 	std::vector<VkBuffer> animBuffers;
 	std::vector<VkDeviceMemory> animBuffersMemory;
+
+	// Static because I want all these to share the buffer, since it's related to the mesh but not per mesh
+	inline static std::vector<VkBuffer> boneBuffers;
+	inline static std::vector<VkDeviceMemory> boneBuffersMemory;
+	inline static std::vector<void*> boneBuffersMapped;
+	inline static size_t boneCount;
 
 	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> descriptorSets;

@@ -19,6 +19,10 @@ layout(std140, binding = 3) readonly buffer AnimBuffer {
 	vec4 anims[];
 } animBuffer;
 
+layout(std140, binding = 4) readonly buffer BoneBuffer {
+	mat4 bones[];
+} boneBuffer;
+
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec3 inColor;
@@ -42,13 +46,19 @@ void main() {
 	//gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition.x, inPosition.y, fun, 1.0);
 	mat4 mv =   ubo.view * ubo.model;
 	vec3 pos = inPosition;
-	if (constants.value > .5)
-		pos += animBuffer.anims[17 * constants.numVertices + inIndex].xzy + animBuffer.anims[32 * constants.numVertices + inIndex].xzy;
-	vec4 P = mv * vec4(pos, 1.0);
+	pos += constants.value * (animBuffer.anims[int(constants.value) * (17 * constants.numVertices + inIndex)].xzy + animBuffer.anims[int(constants.value) * (32 * constants.numVertices + inIndex)].xzy);
+	vec3 posAfterBone = vec3(0);
+	for (int i = 0; i < 4; i++) {
+		mat4 boneTransform = boneBuffer.bones[inJoints[i]];
+		posAfterBone += (inWeights[i] * (boneTransform * vec4(pos, 1.0))).xyz;
+	}
+	if (posAfterBone == vec3(0))
+		posAfterBone = pos;
+	vec4 P = mv * vec4(posAfterBone, 1.0);
 
 	gl_Position = ubo.proj * P;
 	fragColour = inColor;
 	fragTexCoord = vec2(1-inTexCoord.x, inTexCoord.y);
 	//fragNormal = vec3(inNormal.x * -1, inNormal.zy);
-	fragNormal = pos.xyz;
+	fragNormal = posAfterBone;
 }

@@ -30,11 +30,12 @@ namespace VRM {
 	};
 
 	struct FCNSNode {
-		glm::vec4 translation;
-		glm::vec4 scale;
+		glm::vec3 translation;
+		glm::vec3 scale;
 		glm::vec4 rotation;
 		int mesh;
 		int skin;
+		int parent;
 		int firstChild;
 		int nextSibling;
 	};
@@ -158,6 +159,17 @@ public:
 		auto& primitive = mesh["primitives"][primitiveIndex];
 		return primitive["targets"].size();
 	}
+
+	size_t getBoneCount() {
+		auto& accessor = header["accessors"][0];
+		size_t bufferViewIndex = accessor["bufferView"];
+		size_t count = accessor["count"];
+		return count;
+	}
+
+	Array<glm::mat4> getBoneTransforms();
+private:
+	std::vector<glm::mat4> _boneTransforms;
 };
 
 #endif

@@ -75,6 +75,7 @@ public:
 	void mainLoop();
 	void updateCamera();
 	void updateUniformBuffers(uint32_t currentImage);
+	void updateBoneTransforms(uint32_t currentImage);
 	void MovementHandler();
 	void loadScene();
 	void createVertexBuffers();

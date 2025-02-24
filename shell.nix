@@ -19,6 +19,8 @@ mkShell {
     vulkan-tools-lunarg
     assimp
     valgrind
+    kdePackages.kdevelop
+    renderdoc
   ];
 
   # If it doesnt get picked up through nix magic
