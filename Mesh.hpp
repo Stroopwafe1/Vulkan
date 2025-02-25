@@ -12,21 +12,22 @@ extern const int MAX_FRAMES_IN_FLIGHT;
 
 class Mesh {
 public:
-	void updateUniformBuffer(const Township::Camera& camera, uint32_t currentImage);
-	void createDescriptorSets(Vulkan& vulkan);
-	void createDescriptorPool(Vulkan& vulkan);
+	void updateUniformBuffer(const Camera& camera, uint32_t currentImage);
 	void createVertexBuffer(Vulkan& vulkan);
 	void createIndexBuffer(Vulkan& vulkan);
 	void createUniformBuffers(Vulkan& vulkan);
-	void createAnimBuffer(Vulkan& vulkan);
-	void createMaterialBuffer(Vulkan& vulkan);
+	void createMaterialBuffers(Vulkan& vulkan);
+	void createAnimBuffers(Vulkan& vulkan);
 	void cleanup(Vulkan& vulkan);
 
-	static void createBoneBuffers(size_t count, Vulkan& vulkan);
-	static void updateBoneBuffers(glm::mat4* data, size_t count, uint32_t currentImage);
-	static void cleanup_s(Vulkan& vulkan);
+	void createDescriptorSets(Vulkan& vulkan);
+	void createDescriptorSetLayout(Vulkan& vulkan);
+	void createDescriptorPool(Vulkan& vulkan);
 
 public:
+	int meshIndex;
+	int primitiveIndex;
+
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
 	VRM::Material material;
@@ -43,17 +44,13 @@ public:
 
 	std::vector<VkBuffer> materialBuffers;
 	std::vector<VkDeviceMemory> materialBuffersMemory;
+
 	std::vector<VkBuffer> animBuffers;
 	std::vector<VkDeviceMemory> animBuffersMemory;
 
-	// Static because I want all these to share the buffer, since it's related to the mesh but not per mesh
-	inline static std::vector<VkBuffer> boneBuffers;
-	inline static std::vector<VkDeviceMemory> boneBuffersMemory;
-	inline static std::vector<void*> boneBuffersMapped;
-	inline static size_t boneCount;
-
 	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> descriptorSets;
+	VkDescriptorSetLayout descriptorSetLayout;
 };
 
 #endif

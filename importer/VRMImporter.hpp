@@ -8,6 +8,7 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 template<class T>
 struct Array {
@@ -30,9 +31,9 @@ namespace VRM {
 	};
 
 	struct FCNSNode {
-		glm::vec3 translation;
-		glm::vec3 scale;
-		glm::vec4 rotation;
+		glm::mat4 localTransform;
+		glm::mat4 globalTransform;
+		glm::mat4 jointMatrix;
 		int mesh;
 		int skin;
 		int parent;
@@ -162,14 +163,12 @@ public:
 
 	size_t getBoneCount() {
 		auto& accessor = header["accessors"][0];
-		size_t bufferViewIndex = accessor["bufferView"];
 		size_t count = accessor["count"];
 		return count;
 	}
 
-	Array<glm::mat4> getBoneTransforms();
-private:
-	std::vector<glm::mat4> _boneTransforms;
+	void calculateJoints();
+	void recalculateMatrices();
 };
 
 #endif

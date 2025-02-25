@@ -55,26 +55,32 @@ void VRMImporter::loadNodes() {
 
 	for (size_t i = 0; i < size; i++) {
 		VRM::FCNSNode node;
+		node.localTransform = glm::mat4(1.0);
 		auto& n = header["nodes"][i];
+
+		glm::mat4 translation;
+		glm::mat4 rotation;
+		glm::mat4 scaling;
+
 		if (n.contains("translation")) {
 			auto& trans = n["translation"];
-			node.translation = glm::vec3(trans[0], trans[1], trans[2]);
+			translation = glm::translate(glm::mat4(1.0f), glm::vec3(trans[0], trans[1], trans[2]));
 		} else {
-			node.translation = glm::vec3(0);
+			translation = glm::translate(glm::mat4(1.0), glm::vec3(0));
 		}
 
 		if (n.contains("rotation")) {
 			auto& trans = n["rotation"];
-			node.rotation = glm::vec4(trans[0], trans[1], trans[2], trans[3]);
+			rotation = glm::mat4(glm::quat(trans[0], trans[1], trans[2], trans[3]));
 		} else {
-			node.rotation = glm::vec4(0, 0, 0, 1);
+			rotation = glm::mat4(glm::quat(0, 0, 0, 1));
 		}
 
 		if (n.contains("scale")) {
 			auto& trans = n["scale"];
-			node.scale = glm::vec3(trans[0], trans[1], trans[2]);
+			scaling = glm::scale(glm::mat4(1.0), glm::vec3(trans[0], trans[1], trans[2]));
 		} else {
-			node.scale = glm::vec3(1);
+			scaling = glm::scale(glm::mat4(1.0), glm::vec3(1));
 		}
 
 		if (n.contains("mesh")) {
@@ -94,6 +100,8 @@ void VRMImporter::loadNodes() {
 			node.firstChild = children[0];
 		}
 
+		node.localTransform = translation * rotation * scaling;
+		node.globalTransform = node.localTransform;
 		node.parent = -1;
 		node.nextSibling = -1;
 		nodes.push_back(node);
@@ -102,10 +110,19 @@ void VRMImporter::loadNodes() {
 	// Next sibling loop
 	for (size_t i = 0; i < size; i++) {
 		auto& n = header["nodes"][i];
+		VRM::FCNSNode& parent = nodes[i];
 
 		if (!n.contains("children")) continue;
 		size_t childrenCount = n["children"].size();
-		if (childrenCount <= 1) {
+
+		// Update global transform
+		for (size_t j = 0; j < childrenCount; j++) {
+			size_t childIndex = n["children"][j];
+			VRM::FCNSNode& child = nodes[childIndex];
+			child.globalTransform = child.localTransform * parent.localTransform;
+		}
+
+		if (childrenCount == 1) {
 			size_t childIndex = n["children"][0];
 			VRM::FCNSNode& child = nodes[childIndex];
 			child.parent = i;
@@ -124,30 +141,48 @@ void VRMImporter::loadNodes() {
 	}
 }
 
-Array<glm::mat4> VRMImporter::getBoneTransforms() {
+void VRMImporter::calculateJoints() {
 	auto& accessor = header["accessors"][0];
 	size_t bufferViewIndex = accessor["bufferView"];
-	size_t count = accessor["count"];
-	_boneTransforms.reserve(count);
+
 	auto& bufferView = header["bufferViews"][bufferViewIndex];
 	size_t byteOffset = bufferView["byteOffset"];
 	glm::mat4* inverseBinds = reinterpret_cast<glm::mat4*>(&buffer.at(byteOffset));
 
-	_boneTransforms[0] = glm::mat4(1.0);
-	for (size_t i = 0; i < count; i++) {
+	for (size_t i = 0; i < nodes.size(); i++) {
 		VRM::FCNSNode& node = nodes[i];
-		glm::mat4 trans = glm::mat4(1.0);
-		//glm::mat4 scaled = glm::scale(trans, node.scale);
-		// trans *= node.rotation;
-		//glm::mat4 translated = glm::translate(trans, node.translation);
+		glm::mat4 inverseTransform = glm::inverse(node.globalTransform);
 
-		if (node.parent != -1)
-			_boneTransforms[i] = trans * _boneTransforms[node.parent];
+		if (node.skin != -1) {
+			auto& joints = header["skins"][node.skin]["joints"];
+			size_t jointsCount = joints.size();
 
-		_boneTransforms[i] = _boneTransforms[i] * inverseBinds[i];
+			for (size_t j = 0; j < jointsCount; j++) {
+				size_t jointIndex = joints[j];
+				VRM::FCNSNode& joint = nodes[jointIndex];
+				glm::mat4 jointMat = joint.globalTransform * inverseBinds[j];
+				jointMat = inverseTransform * jointMat;
+				node.jointMatrix = jointMat;
+			}
+		}
 	}
-
-	return {_boneTransforms.data(), count};
 }
 
+void VRMImporter::recalculateMatrices() {
+	for (size_t i = 0; i < nodes.size(); i++) {
+		VRM::FCNSNode& parent = nodes[i];
+		auto& n = header["nodes"][i];
 
+		if (!n.contains("children")) continue;
+		size_t childrenCount = n["children"].size();
+
+		// Update global transform
+		for (size_t j = 0; j < childrenCount; j++) {
+			size_t childIndex = n["children"][j];
+			VRM::FCNSNode& child = nodes[childIndex];
+			child.globalTransform = child.localTransform * parent.localTransform;
+		}
+	}
+
+	calculateJoints();
+}

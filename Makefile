@@ -1,10 +1,14 @@
 CFLAGS = -std=c++17 -g -Og
 LDFLAGS = -lglfw -lvulkan -ldl -lpthread
 
+SOURCES = main.cpp Camera.cpp Mesh.cpp Vulkan.cpp Application.cpp importer/VRMImporter.cpp Scene.cpp
+
+DEPENDENCIES = $(SOURCES) Camera.hpp Mesh.hpp Application.hpp importer/VRMImporter.hpp Scene.hpp structs.hpp
+
 .PHONY: test clean
 
-VulkanTest: main.cpp Camera.hpp Camera.cpp Mesh.cpp Vulkan.cpp Application.hpp Application.cpp importer/VRMImporter.hpp importer/VRMImporter.cpp
-	g++ $(CFLAGS) -o VulkanTest main.cpp Camera.cpp Mesh.cpp Vulkan.cpp Application.cpp importer/VRMImporter.cpp $(LDFLAGS)
+VulkanTest: $(DEPENDENCIES)
+	g++ $(CFLAGS) -o VulkanTest $(SOURCES) $(LDFLAGS)
 
 test: vert.spv frag.spv VulkanTest
 	./VulkanTest
