@@ -27,12 +27,12 @@ struct SwapChainSupportDetails {
 };
 
 struct Vertex {
-	glm::vec3 pos;
-	glm::vec3 normal;
-	glm::vec3 color;
-	glm::vec2 texCoord;
-	glm::uvec4 joints;
-	glm::vec4 weights;
+	alignas(16) glm::vec3 pos;
+	alignas(16) glm::vec3 normal;
+	alignas(16) glm::vec3 color;
+	alignas(8) glm::vec2 texCoord;
+	alignas(16) glm::uvec4 joints;
+	alignas(16) glm::vec4 weights;
 	int index;
 
 	static VkVertexInputBindingDescription getBindingDescription() {
@@ -93,6 +93,7 @@ struct PushConstants {
 	int materialIndex;
 	float value;
 	int numVertices;
+	int nodeIndex;
 };
 
 struct UniformBufferObject {

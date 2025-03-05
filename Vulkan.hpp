@@ -6,7 +6,7 @@
 #include <iostream>
 #include "structs.hpp"
 
-const int MAX_FRAMES_IN_FLIGHT = 2;
+const int g_MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation",
@@ -26,49 +26,48 @@ const std::vector<const char*> deviceExtensions = {
 };
 
 #ifdef NDEBUG
-const bool enableValidationLayers = false;
-const bool validateExtensions = false;
+const bool g_EnableValidationLayers = false;
+const bool g_ValidateExtensions = false;
 #else
-const bool enableValidationLayers = true;
-const bool validateExtensions = true;
+const bool g_EnableValidationLayers = true;
+const bool g_ValidateExtensions = true;
 #endif
 
 class Vulkan {
 public:
-	uint32_t currentFrame = 0;
-	bool invalidated = false;
-	size_t surface_width = 0;
-	size_t surface_height = 0;
-	std::vector<const char*> extensions;
+	uint32_t m_CurrentFrame = 0;
+	bool m_Invalidated = false;
+	size_t m_SurfaceWidth = 0;
+	size_t m_SurfaceHeight = 0;
+	std::vector<const char*> m_Extensions;
 
-	VkInstance instance;
-	VkDebugUtilsMessengerEXT debugMessenger;
-	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-	VkDevice device;
-	VkSurfaceKHR surface;
-	VkQueue graphicsQueue;
-	VkQueue presentQueue;
-	VkSwapchainKHR swapChain;
-	std::vector<VkImage> swapChainImages;
-	VkFormat swapChainImageFormat;
-	VkExtent2D swapChainExtent;
-	std::vector<VkImageView> swapChainImageViews;
-	VkRenderPass renderPass;
+	VkInstance m_Instance;
+	VkDebugUtilsMessengerEXT m_DebugMessenger;
+	VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
+	VkDevice m_Device;
+	VkSurfaceKHR m_Surface;
+	VkQueue m_GraphicsQueue;
+	VkQueue m_PresentQueue;
 
-	VkPipelineLayout pipelineLayout;
-	VkPipeline graphicsPipeline;
-	std::vector<VkFramebuffer> swapChainFramebuffers;
-	VkCommandPool commandPool;
-	std::vector<VkCommandBuffer> commandBuffers;
-	std::vector<VkSemaphore> imageAvailableSemaphores;
-	std::vector<VkSemaphore> renderFinishedSemaphores;
-	std::vector<VkFence> inFlightFences;
+	VkSwapchainKHR m_SwapChain;
+	std::vector<VkImage> m_SwapChainImages;
+	VkFormat m_SwapChainImageFormat;
+	VkExtent2D m_SwapChainExtent;
+	std::vector<VkImageView> m_SwapChainImageViews;
+	std::vector<VkFramebuffer> m_SwapChainFramebuffers;
 
-	PFN_vkCmdSetDepthTestEnableEXT pvkCmdSetDepthTestEnableEXT;
+	VkRenderPass m_RenderPass;
+	VkPipelineLayout m_PipelineLayout;
+	VkPipeline m_GraphicsPipeline;
+	VkCommandPool m_CommandPool;
+	std::vector<VkCommandBuffer> m_CommandBuffers;
+	std::vector<VkSemaphore> m_ImageAvailableSemaphores;
+	std::vector<VkSemaphore> m_RenderFinishedSemaphores;
+	std::vector<VkFence> m_InFlightFences;
 
-	VkImage depthImage;
-	VkDeviceMemory depthImageMemory;
-	VkImageView depthImageView;
+	VkImage m_DepthImage;
+	VkDeviceMemory m_DepthImageMemory;
+	VkImageView m_DepthImageView;
 
 	void init(std::vector<const char*>& extensions, size_t width, size_t height);
 	void init2();
@@ -84,7 +83,6 @@ public:
 	void endDrawFrame(uint32_t* imageIndex);
 
 	void createInstance();
-	void loadExtensionFunctions();
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 	VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 	VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);

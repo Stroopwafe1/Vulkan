@@ -3,6 +3,7 @@
 
 #include "../json.hpp"
 #include <iostream>
+#include <unordered_map>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -31,9 +32,9 @@ namespace VRM {
 	};
 
 	struct FCNSNode {
-		glm::mat4 localTransform;
-		glm::mat4 globalTransform;
-		glm::mat4 jointMatrix;
+		alignas(16) glm::mat4 localTransform;
+		alignas(16) glm::mat4 globalTransform;
+		alignas(16) glm::mat4 jointMatrix;
 		int mesh;
 		int skin;
 		int parent;
@@ -44,75 +45,76 @@ namespace VRM {
 
 class VRMImporter {
 public:
-	nlohmann::json header;
-	std::vector<char> buffer;
-	std::vector<VRM::FCNSNode> nodes;
+	nlohmann::json m_Header;
+	std::vector<char> m_Buffer;
+	std::vector<VRM::FCNSNode> m_Nodes;
+	std::unordered_map<size_t, std::vector<glm::mat4>> m_Joints;
 	void loadModel(const std::string& path);
 
 	void loadNodes();
 
 	template<class T>
 	Array<T> getMeshAttribute(int meshIndex, int primitiveIndex, const std::string& attribute) {
-		auto& mesh = header["meshes"][meshIndex];
+		auto& mesh = m_Header["meshes"][meshIndex];
 		auto& primitive = mesh["primitives"][primitiveIndex];
 		if (!primitive["attributes"].contains(attribute)) {
 			return {nullptr, 0};
 		}
 		int accessorIndex = primitive["attributes"][attribute];
-		auto& accessor = header["accessors"][accessorIndex];
+		auto& accessor = m_Header["accessors"][accessorIndex];
 		size_t bufferViewIndex = accessor["bufferView"];
-		auto& bufferView = header["bufferViews"][bufferViewIndex];
+		auto& bufferView = m_Header["bufferViews"][bufferViewIndex];
 		size_t byteOffset = bufferView["byteOffset"];
 		size_t count = accessor["count"];
-		return {reinterpret_cast<T*>(&buffer.at(byteOffset)), count};
+		return {reinterpret_cast<T*>(&m_Buffer.at(byteOffset)), count};
 	}
 
 	template<class T>
 	Array<T> getMeshProperty(int meshIndex, int primitiveIndex, const std::string& property) {
-		auto& mesh = header["meshes"][meshIndex];
+		auto& mesh = m_Header["meshes"][meshIndex];
 		auto& primitive = mesh["primitives"][primitiveIndex];
 		int accessorIndex = primitive[property];
-		auto& accessor = header["accessors"][accessorIndex];
+		auto& accessor = m_Header["accessors"][accessorIndex];
 		size_t bufferViewIndex = accessor["bufferView"];
-		auto& bufferView = header["bufferViews"][bufferViewIndex];
+		auto& bufferView = m_Header["bufferViews"][bufferViewIndex];
 		size_t byteOffset = bufferView["byteOffset"];
 		size_t count = accessor["count"];
-		return {reinterpret_cast<T*>(&buffer.at(byteOffset)), count};
+		return {reinterpret_cast<T*>(&m_Buffer.at(byteOffset)), count};
 	}
 
 	template<class T>
 	Array<T> getMeshMorph(int meshIndex, int primitiveIndex, size_t morphIndex, const std::string& attribute) {
-		auto& mesh = header["meshes"][meshIndex];
+		auto& mesh = m_Header["meshes"][meshIndex];
 		auto& primitive = mesh["primitives"][primitiveIndex];
 		int accessorIndex = primitive["targets"][morphIndex][attribute];
-		auto& accessor = header["accessors"][accessorIndex];
+		auto& accessor = m_Header["accessors"][accessorIndex];
 		size_t bufferViewIndex = accessor["bufferView"];
-		auto& bufferView = header["bufferViews"][bufferViewIndex];
+		auto& bufferView = m_Header["bufferViews"][bufferViewIndex];
 		size_t byteOffset = bufferView["byteOffset"];
 		size_t count = accessor["count"];
-		return {reinterpret_cast<T*>(&buffer.at(byteOffset)), count};
+		return {reinterpret_cast<T*>(&m_Buffer.at(byteOffset)), count};
 	}
 
 	size_t getMeshMaterialIndex(size_t meshIndex, size_t primitiveIndex) {
-		return header["meshes"][meshIndex]["primitives"][primitiveIndex]["material"];
+		return m_Header["meshes"][meshIndex]["primitives"][primitiveIndex]["material"];
 	}
 
 	char* getBufferView(size_t bufferView) {
-		size_t offset = header["bufferViews"][bufferView]["byteOffset"];
-		return buffer.data() + offset;
+		size_t offset = m_Header["bufferViews"][bufferView]["byteOffset"];
+		return m_Buffer.data() + offset;
 	}
 
 	VRM::TextureData getTextureData(size_t textureIndex) {
-		size_t bufferViewIndex = header["images"][textureIndex]["bufferView"];
+		size_t bufferViewIndex = m_Header["images"][textureIndex]["bufferView"];
 		return {
 			getBufferView(bufferViewIndex),
-			header["bufferViews"][bufferViewIndex]["byteLength"]
+			m_Header["bufferViews"][bufferViewIndex]["byteLength"]
 		};
 	}
 
 	VRM::Material getMaterial(size_t materialIndex) {
 		VRM::Material material;
-		auto& mat = header["materials"][materialIndex];
+		auto& mat = m_Header["materials"][materialIndex];
 		if (mat.contains("alphaMode"))
 			material.alphaMode = mat["alphaMode"] == "MASK" ? 0 : 1;
 		else
@@ -143,26 +145,34 @@ public:
 		return material;
 	}
 
+	int findNodeFromMeshIndex(size_t meshIndex) {
+		for (size_t i = 0; i < m_Nodes.size(); i++) {
+			if (m_Nodes[i].mesh == meshIndex)
+				return i;
+		}
+		return -1;
+	}
+
 	size_t getMeshCount() {
-		return header["meshes"].size();
+		return m_Header["meshes"].size();
 	}
 
 	size_t getPrimitiveCount(size_t meshIndex) {
-		return header["meshes"][meshIndex]["primitives"].size();
+		return m_Header["meshes"][meshIndex]["primitives"].size();
 	}
 
 	size_t getTextureCount() {
-		return header["textures"].size();
+		return m_Header["textures"].size();
 	}
 
 	size_t getMeshBlendShapeCount(size_t meshIndex, size_t primitiveIndex) {
-		auto& mesh = header["meshes"][meshIndex];
+		auto& mesh = m_Header["meshes"][meshIndex];
 		auto& primitive = mesh["primitives"][primitiveIndex];
 		return primitive["targets"].size();
 	}
 
 	size_t getBoneCount() {
-		auto& accessor = header["accessors"][0];
+		auto& accessor = m_Header["accessors"][0];
 		size_t count = accessor["count"];
 		return count;
 	}

@@ -32,6 +32,7 @@ layout (push_constant) uniform PushConstant {
 	int materialIndex;
 	float value;
 	int numVertices;
+	int nodeIndex;
 } constants;
 
 void main() {

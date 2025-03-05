@@ -8,6 +8,7 @@ void Scene::update(uint32_t currentImage, bool keystates[400], double dt) {
 	updateCamera(dt);
 	updateUniformBuffers(currentImage);
 	vrmImporter.recalculateMatrices();
+	updateNodeBuffers(currentImage);
 }
 
 void Scene::cleanup() {
@@ -15,14 +16,19 @@ void Scene::cleanup() {
 		mesh.cleanup(*vulkan);
 	}
 	for (int i = 0; i < textureData.size(); i++) {
-		vkDestroySampler(vulkan->device, textureSamplers[i], nullptr);
-		vkDestroyImageView(vulkan->device, textureImageViews[i], nullptr);
-		vkDestroyImage(vulkan->device, textureImages[i], nullptr);
-		vkFreeMemory(vulkan->device, textureImageMemories[i], nullptr);
+		vkDestroySampler(vulkan->m_Device, textureSamplers[i], nullptr);
+		vkDestroyImageView(vulkan->m_Device, textureImageViews[i], nullptr);
+		vkDestroyImage(vulkan->m_Device, textureImages[i], nullptr);
+		vkFreeMemory(vulkan->m_Device, textureImageMemories[i], nullptr);
 	}
 
-	vkDestroyDescriptorPool(vulkan->device, descriptorPool, nullptr);
-	vkDestroyDescriptorSetLayout(vulkan->device, descriptorSetLayout, nullptr);
+	for (int i = 0; i < g_MAX_FRAMES_IN_FLIGHT; i++) {
+		vkDestroyBuffer(vulkan->m_Device, nodeBuffers[i], nullptr);
+		vkFreeMemory(vulkan->m_Device, nodeBuffersMemory[i], nullptr);
+	}
+
+	vkDestroyDescriptorPool(vulkan->m_Device, descriptorPool, nullptr);
+	vkDestroyDescriptorSetLayout(vulkan->m_Device, descriptorSetLayout, nullptr);
 }
 
 void Scene::load(const std::string& file, Vulkan* vulkan) {
@@ -36,14 +42,14 @@ void Scene::load(const std::string& file, Vulkan* vulkan) {
 		size_t primitiveCount = vrmImporter.getPrimitiveCount(i);
 		for (size_t j = 0; j < primitiveCount; j++) {
 			Mesh m;
-			m.meshIndex = i;
-			m.primitiveIndex = j;
+			m.m_MeshIndex = i;
+			m.m_PrimitiveIndex = j;
 			Array<glm::vec3> positions = vrmImporter.getMeshAttribute<glm::vec3>(i, j, "POSITION");
 			Array<glm::vec3> normals = vrmImporter.getMeshAttribute<glm::vec3>(i, j, "NORMAL");
 			Array<glm::vec2> texCoords = vrmImporter.getMeshAttribute<glm::vec2>(i, j, "TEXCOORD_0");
 			Array<glm::u16vec4> joints = vrmImporter.getMeshAttribute<glm::u16vec4>(i, j, "JOINTS_0");
 			Array<glm::vec4> weights = vrmImporter.getMeshAttribute<glm::vec4>(i, j, "WEIGHTS_0");
-			m.vertices.reserve(positions.count);
+			m.m_Vertices.reserve(positions.count);
 
 			for (size_t k = 0; k < positions.count; k++) {
 				Vertex v;
@@ -58,11 +64,11 @@ void Scene::load(const std::string& file, Vulkan* vulkan) {
 				if (weights.count > 0)
 					v.weights = weights.data[k];
 
-				m.vertices.push_back(v);
+				m.m_Vertices.push_back(v);
 			}
 
 			size_t animCount = vrmImporter.getMeshBlendShapeCount(i, j);
-			m.anims.reserve(animCount);
+			m.m_Anims.reserve(animCount);
 			for (size_t k = 0; k < animCount; k++) {
 				AnimMesh anim;
 				Array<glm::vec3> vecs = vrmImporter.getMeshMorph<glm::vec3>(i, j, k, "POSITION");
@@ -71,17 +77,17 @@ void Scene::load(const std::string& file, Vulkan* vulkan) {
 					glm::vec3 vec = vecs.data[l];
 					anim.verts.push_back(glm::vec4(vec.x, vec.y, vec.z, 1));
 				}
-				m.anims.push_back(anim);
+				m.m_Anims.push_back(anim);
 			}
 
 			Array<uint32_t> indices = vrmImporter.getMeshProperty<uint32_t>(i, j, "indices");
-			m.indices.reserve(indices.count);
+			m.m_Indices.reserve(indices.count);
 			for (size_t k = 0; k < indices.count; k++) {
-				m.indices.push_back(indices.data[k]);
+				m.m_Indices.push_back(indices.data[k]);
 			}
 
 			size_t materialIndex = vrmImporter.getMeshMaterialIndex(i, j);
-			m.material = vrmImporter.getMaterial(materialIndex);
+			m.m_Material = vrmImporter.getMaterial(materialIndex);
 			meshes.push_back(m);
 		}
 	}
@@ -115,11 +121,12 @@ void Scene::setup() {
 	createUniformBuffers();
 	createMaterialBuffers();
 	createAnimBuffers();
+	createNodeBuffers();
 	createDescriptorPools();
 	createDescriptorSets();
 
 	const std::vector<VkDescriptorSetLayout> layouts = {
-		meshes[0].descriptorSetLayout,
+		meshes[0].m_DescriptorSetLayout,
 		descriptorSetLayout
 	};
 
@@ -127,15 +134,15 @@ void Scene::setup() {
 }
 
 void Scene::draw() {
-	VkCommandBuffer commandBuffer = vulkan->commandBuffers[vulkan->currentFrame];
-	size_t frame = vulkan->currentFrame;
+	VkCommandBuffer commandBuffer = vulkan->m_CommandBuffers[vulkan->m_CurrentFrame];
+	size_t frame = vulkan->m_CurrentFrame;
 	for (const auto& mesh : meshes) {
-		VkBuffer vBuffers[] = {mesh.vertexBuffer};
+		VkBuffer vBuffers[] = {mesh.m_VertexBuffer};
 		VkDeviceSize offsets[] = {0};
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vBuffers, offsets);
-		vkCmdBindIndexBuffer(commandBuffer, mesh.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdBindIndexBuffer(commandBuffer, mesh.m_IndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-		VkDescriptorSet meshs = mesh.descriptorSets[frame];
+		VkDescriptorSet meshs = mesh.m_DescriptorSets[frame];
 		VkDescriptorSet scenes = descriptorSets[frame];
 		std::array<VkDescriptorSet, 2> sets = {
 		 	meshs,
@@ -143,24 +150,37 @@ void Scene::draw() {
 		};
 		//VkDescriptorSet sets[2] = {mesh.descriptorSets[frame], descriptorSets[frame]};
 
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vulkan->pipelineLayout, 0, sets.size(), sets.data(), 0, nullptr);
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vulkan->m_PipelineLayout, 0, sets.size(), sets.data(), 0, nullptr);
+
+		int nodeIndex = vrmImporter.findNodeFromMeshIndex(mesh.m_MeshIndex);
+		// VRM::FCNSNode& node = vrmImporter.nodes[nodeIndex];
+		// if (node.skin != -1) {
+		// 	std::cout << node.skin << std::endl;
+		// 	std::vector<glm::mat4>& joints = vrmImporter.joints[node.skin];
+		// 	for (size_t i = 0; i < joints.size(); i++) {
+		// 		vrmImporter.nodes[i].jointMatrix = joints[i];
+		// 	}
+		// 	memcpy(nodeBuffersMapped[vulkan->currentFrame], vrmImporter.nodes.data(), sizeof(vrmImporter.nodes[0]) * vrmImporter.nodes.size());
+		// }
 
 		float anim = 0.0;
-		if (!mesh.anims.empty())
+		if (!mesh.m_Anims.empty())
 		 	anim = 1.0;
+
 		PushConstants constants;
 		constants.materialIndex = 0;
 		constants.value = anim;
-		constants.numVertices = mesh.vertices.size();
+		constants.numVertices = mesh.m_Vertices.size();
+		constants.nodeIndex = nodeIndex;
 
-		vkCmdPushConstants(commandBuffer, vulkan->pipelineLayout,  VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &constants);
+		vkCmdPushConstants(commandBuffer, vulkan->m_PipelineLayout,  VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &constants);
 		//vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
-		vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(mesh.indices.size()), 1, 0, 0, 0);
+		vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(mesh.m_Indices.size()), 1, 0, 0, 0);
 	}
 }
 
 void Scene::updateCamera(double dt) {
-	camera.SetAspect(float(vulkan->swapChainExtent.width) / float(vulkan->swapChainExtent.height));
+	camera.SetAspect(float(vulkan->m_SwapChainExtent.width) / float(vulkan->m_SwapChainExtent.height));
 	glm::vec3 direction{};
 	direction.x = cos(glm::radians(camera.m_Yaw)) * cos(glm::radians(camera.m_Pitch));
 	direction.y = sin(glm::radians(camera.m_Pitch));
@@ -174,6 +194,12 @@ void Scene::updateUniformBuffers(uint32_t currentImage) {
 		mesh.updateUniformBuffer(camera, currentImage);
 	}
 }
+
+void Scene::updateNodeBuffers(uint32_t currentImage) {
+	vrmImporter.recalculateMatrices();
+	memcpy(nodeBuffersMapped[currentImage], vrmImporter.m_Nodes.data(), sizeof(vrmImporter.m_Nodes[0]) * vrmImporter.m_Nodes.size());
+}
+
 
 void Scene::handleKeystate(bool keystates[400], double dt) {
 	float speedMult;
@@ -196,6 +222,11 @@ void Scene::handleKeystate(bool keystates[400], double dt) {
 		camera.m_Position -= camera.m_Up * cameraSpeed;
 	if (keystates[int('E')]) // Directly up
 		camera.m_Position += camera.m_Up * cameraSpeed;
+
+	if (keystates[int('R')]) {
+		VRM::FCNSNode& node = vrmImporter.m_Nodes[1];
+		node.localTransform = glm::rotate(node.localTransform, float(glm::radians(1.0)), glm::vec3(0, 1, 0));
+	}
 
 	if (keystates[int('I')]) // Look up
 		camera.m_Pitch += rotationSpeed * speedMult;
@@ -225,14 +256,21 @@ void Scene::createDescriptorSetLayouts(size_t numTextures) {
 	samplerLayoutBinding.pImmutableSamplers = nullptr;
 	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	std::array<VkDescriptorSetLayoutBinding, 1> bindings = {samplerLayoutBinding};
+	VkDescriptorSetLayoutBinding nodeLayoutBinding{};
+	nodeLayoutBinding.binding = 1;
+	nodeLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	nodeLayoutBinding.descriptorCount = 1;
+	nodeLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	nodeLayoutBinding.pImmutableSamplers = nullptr; // Optional
+
+	std::array<VkDescriptorSetLayoutBinding, 2> bindings = {samplerLayoutBinding, nodeLayoutBinding};
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
 	layoutInfo.pBindings = bindings.data();
 
-	if (vkCreateDescriptorSetLayout(vulkan->device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
+	if (vkCreateDescriptorSetLayout(vulkan->m_Device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
 		throw std::runtime_error("[Scene#createDescriptorSetLayout]: Error: Failed to create descriptor set layout!");
 	}
 }
@@ -254,9 +292,9 @@ void Scene::createTextureImages(size_t numTextures) {
 		vulkan->createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
 		void* data;
-		vkMapMemory(vulkan->device, stagingBufferMemory, 0, imageSize, 0, &data);
+		vkMapMemory(vulkan->m_Device, stagingBufferMemory, 0, imageSize, 0, &data);
 		memcpy(data, pixels, static_cast<size_t>(imageSize));
-		vkUnmapMemory(vulkan->device, stagingBufferMemory);
+		vkUnmapMemory(vulkan->m_Device, stagingBufferMemory);
 		stbi_image_free(pixels);
 
 		vulkan->createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImages[i], textureImageMemories[i]);
@@ -265,8 +303,8 @@ void Scene::createTextureImages(size_t numTextures) {
 		vulkan->copyBufferToImage(stagingBuffer, textureImages[i], static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
 		vulkan->transitionImageLayout(textureImages[i], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-		vkDestroyBuffer(vulkan->device, stagingBuffer, nullptr);
-		vkFreeMemory(vulkan->device, stagingBufferMemory, nullptr);
+		vkDestroyBuffer(vulkan->m_Device, stagingBuffer, nullptr);
+		vkFreeMemory(vulkan->m_Device, stagingBufferMemory, nullptr);
 	}
 }
 
@@ -292,7 +330,7 @@ void Scene::createTextureSamplers(size_t numTextures) {
 	samplerInfo.anisotropyEnable = VK_TRUE;
 
 	VkPhysicalDeviceProperties properties{};
-	vkGetPhysicalDeviceProperties(vulkan->physicalDevice, &properties);
+	vkGetPhysicalDeviceProperties(vulkan->m_PhysicalDevice, &properties);
 	samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
 
 	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
@@ -308,7 +346,7 @@ void Scene::createTextureSamplers(size_t numTextures) {
 	textureSamplers.reserve(numTextures);
 	for (int i = 0; i < numTextures; i++) {
 		VkSampler sampler;
-		if (vkCreateSampler(vulkan->device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS) {
+		if (vkCreateSampler(vulkan->m_Device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS) {
 			throw std::runtime_error("[Scene#createTextureSampler]: Error: Failed to create texture sampler!");
 		}
 		textureSamplers.push_back(sampler);
@@ -320,20 +358,20 @@ void Scene::createDescriptorSets() {
 		mesh.createDescriptorSets(*vulkan);
 	}
 
-	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
+	std::vector<VkDescriptorSetLayout> layouts(g_MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = descriptorPool;
-	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	allocInfo.descriptorSetCount = static_cast<uint32_t>(g_MAX_FRAMES_IN_FLIGHT);
 	allocInfo.pSetLayouts = layouts.data();
 
-	descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-	if (vkAllocateDescriptorSets(vulkan->device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
+	descriptorSets.resize(g_MAX_FRAMES_IN_FLIGHT);
+	if (vkAllocateDescriptorSets(vulkan->m_Device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
 		throw std::runtime_error("[HelloTriangleApplication#createDescriptorSet]: Error: Failed to allocate descriptor sets!");
 	}
 
-	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		std::vector<VkWriteDescriptorSet> descriptorWrites(1);
+	for (size_t i = 0; i < g_MAX_FRAMES_IN_FLIGHT; i++) {
+		std::vector<VkWriteDescriptorSet> descriptorWrites(2);
 		std::vector<VkDescriptorImageInfo> imageInfos(textureImages.size());
 
 		for (int j = 0; j < textureImages.size(); j++) {
@@ -353,7 +391,20 @@ void Scene::createDescriptorSets() {
 		descriptorWrites[0].descriptorCount = imageInfos.size();
 		descriptorWrites[0].pImageInfo = imageInfos.data();
 
-		vkUpdateDescriptorSets(vulkan->device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+		VkDescriptorBufferInfo nodeBufferInfo{};
+		nodeBufferInfo.buffer = nodeBuffers[i];
+		nodeBufferInfo.offset = 0;
+		nodeBufferInfo.range = sizeof(VRM::FCNSNode) * vrmImporter.m_Nodes.size();
+
+		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[1].dstSet = descriptorSets[i];
+		descriptorWrites[1].dstBinding = 1;
+		descriptorWrites[1].dstArrayElement = 0;
+		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		descriptorWrites[1].descriptorCount = 1;
+		descriptorWrites[1].pBufferInfo = &nodeBufferInfo;
+
+		vkUpdateDescriptorSets(vulkan->m_Device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 	}
 }
 
@@ -362,11 +413,11 @@ void Scene::createDescriptorPools() {
 		mesh.createDescriptorPool(*vulkan);
 	}
 
-	std::array<VkDescriptorPoolSize, 1> poolSizes{};
+	std::array<VkDescriptorPoolSize, 2> poolSizes{};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * textureData.size());
-	//poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	//poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	poolSizes[0].descriptorCount = static_cast<uint32_t>(g_MAX_FRAMES_IN_FLIGHT * textureData.size());
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	poolSizes[1].descriptorCount = static_cast<uint32_t>(g_MAX_FRAMES_IN_FLIGHT);
 	// poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	// poolSizes[2].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
@@ -374,12 +425,27 @@ void Scene::createDescriptorPools() {
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
-	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	poolInfo.maxSets = static_cast<uint32_t>(g_MAX_FRAMES_IN_FLIGHT);
 
-	if (vkCreateDescriptorPool(vulkan->device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+	if (vkCreateDescriptorPool(vulkan->m_Device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
 		throw std::runtime_error("[HelloTriangleApplication#createDescriptorPool]: Error: Failed to create descriptor pool!");
 	}
 }
+
+void Scene::createNodeBuffers() {
+	VkDeviceSize bufferSize = sizeof(VRM::FCNSNode) * vrmImporter.m_Nodes.size();
+
+	nodeBuffers.resize(g_MAX_FRAMES_IN_FLIGHT);
+	nodeBuffersMemory.resize(g_MAX_FRAMES_IN_FLIGHT);
+	nodeBuffersMapped.resize(g_MAX_FRAMES_IN_FLIGHT);
+
+	for (size_t i = 0; i < g_MAX_FRAMES_IN_FLIGHT; i++) {
+		vulkan->createBuffer(bufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, nodeBuffers[i], nodeBuffersMemory[i]);
+
+		vkMapMemory(vulkan->m_Device, nodeBuffersMemory[i], 0, bufferSize, 0, &nodeBuffersMapped[i]);
+	}
+}
+
 
 void Scene::createVertexBuffers() {
 	for (auto& mesh : meshes) {

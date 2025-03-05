@@ -8,7 +8,7 @@
 #include "Vulkan.hpp"
 #include "importer/VRMImporter.hpp"
 
-extern const int MAX_FRAMES_IN_FLIGHT;
+extern const int g_MAX_FRAMES_IN_FLIGHT;
 
 class Mesh {
 public:
@@ -25,32 +25,33 @@ public:
 	void createDescriptorPool(Vulkan& vulkan);
 
 public:
-	int meshIndex;
-	int primitiveIndex;
+	int m_MeshIndex;
+	int m_PrimitiveIndex;
 
-	std::vector<Vertex> vertices;
-	std::vector<uint32_t> indices;
-	VRM::Material material;
-	std::vector<AnimMesh> anims;
+	std::vector<Vertex> m_Vertices;
+	std::vector<uint32_t> m_Indices;
+	VRM::Material m_Material;
+	std::vector<AnimMesh> m_Anims;
+	std::vector<glm::mat4> m_Joints;
 
-	VkBuffer vertexBuffer;
-	VkDeviceMemory vertexBufferMemory;
-	VkBuffer indexBuffer;
-	VkDeviceMemory indexBufferMemory;
+	VkBuffer m_VertexBuffer;
+	VkDeviceMemory m_VertexBufferMemory;
+	VkBuffer m_IndexBuffer;
+	VkDeviceMemory m_IndexBufferMemory;
 
-	std::vector<VkBuffer> uniformBuffers;
-	std::vector<VkDeviceMemory> uniformBuffersMemory;
-	std::vector<void*> uniformBuffersMapped;
+	std::vector<VkBuffer> m_UniformBuffers;
+	std::vector<VkDeviceMemory> m_UniformBuffersMemory;
+	std::vector<void*> m_UniformBuffersMapped;
 
-	std::vector<VkBuffer> materialBuffers;
-	std::vector<VkDeviceMemory> materialBuffersMemory;
+	std::vector<VkBuffer> m_MaterialBuffers;
+	std::vector<VkDeviceMemory> m_MaterialBuffersMemory;
 
-	std::vector<VkBuffer> animBuffers;
-	std::vector<VkDeviceMemory> animBuffersMemory;
+	std::vector<VkBuffer> m_AnimBuffers;
+	std::vector<VkDeviceMemory> m_AnimBuffersMemory;
 
-	VkDescriptorPool descriptorPool;
-	std::vector<VkDescriptorSet> descriptorSets;
-	VkDescriptorSetLayout descriptorSetLayout;
+	VkDescriptorPool m_DescriptorPool;
+	std::vector<VkDescriptorSet> m_DescriptorSets;
+	VkDescriptorSetLayout m_DescriptorSetLayout;
 };
 
 #endif

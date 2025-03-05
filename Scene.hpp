@@ -6,7 +6,7 @@
 #include "Camera.hpp"
 #include "Vulkan.hpp"
 
-extern const int MAX_FRAMES_IN_FLIGHT;
+extern const int g_MAX_FRAMES_IN_FLIGHT;
 
 class Scene {
 public:
@@ -21,6 +21,10 @@ public:
 	std::vector<VkImageView> textureImageViews;
 	std::vector<VkSampler> textureSamplers;
 
+	std::vector<VkBuffer> nodeBuffers;
+	std::vector<VkDeviceMemory> nodeBuffersMemory;
+	std::vector<void*> nodeBuffersMapped;
+
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> descriptorSets;
@@ -33,6 +37,7 @@ public:
 private:
 	void updateCamera(double dt);
 	void updateUniformBuffers(uint32_t currentImage);
+	void updateNodeBuffers(uint32_t currentImage);
 	void handleKeystate(bool _keystates[400], double dt);
 
 	void createTextureImages(size_t numTextures);
@@ -42,6 +47,8 @@ private:
 	void createDescriptorSets();
 	void createDescriptorPools();
 	void createDescriptorSetLayouts(size_t numTextures);
+
+	void createNodeBuffers();
 
 	void createAnimBuffers();
 	void createMaterialBuffers();

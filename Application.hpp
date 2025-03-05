@@ -18,8 +18,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-const uint32_t WIDTH = 800;
-const uint32_t HEIGHT = 600;
+const uint32_t g_WIDTH = 800;
+const uint32_t g_HEIGHT = 600;
 
 class Application {
 public:

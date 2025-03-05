@@ -26,23 +26,23 @@ void VRMImporter::loadModel(const std::string& path) {
 	uint32_t chunkType;
 	file.read(reinterpret_cast<char *>(&chunkType), sizeof(uint32_t));
 
-	buffer.resize(chunkLength);
-	file.read(reinterpret_cast<char*>(buffer.data()), chunkLength);
+	m_Buffer.resize(chunkLength);
+	file.read(reinterpret_cast<char*>(m_Buffer.data()), chunkLength);
 	std::cout << "Bytes read: " << file.gcount() << std::endl;
 	assert(file.gcount() >= chunkLength);
 	//buffer.insert(buffer.begin(), std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
 	assert(file.good());
-	assert(buffer.size() == chunkLength);
+	assert(m_Buffer.size() == chunkLength);
 
-	header = nlohmann::json::parse(buffer.data());
+	m_Header = nlohmann::json::parse(m_Buffer.data());
 
 	file.read(reinterpret_cast<char *>(&chunkLength), sizeof(uint32_t));
 	file.read(reinterpret_cast<char *>(&chunkType), sizeof(uint32_t));
-	buffer.clear();
-	buffer.resize(chunkLength);
-	file.read(reinterpret_cast<char*>(buffer.data()), chunkLength);
+	m_Buffer.clear();
+	m_Buffer.resize(chunkLength);
+	file.read(reinterpret_cast<char*>(m_Buffer.data()), chunkLength);
 
-	std::cout << "VRM Header: " << header << std::endl;
+	std::cout << "VRM Header: " << m_Header << std::endl;
 
 	file.close();
 
@@ -50,13 +50,13 @@ void VRMImporter::loadModel(const std::string& path) {
 }
 
 void VRMImporter::loadNodes() {
-	size_t size = header["nodes"].size();
-	nodes.reserve(size);
+	size_t size = m_Header["nodes"].size();
+	m_Nodes.reserve(size);
 
 	for (size_t i = 0; i < size; i++) {
 		VRM::FCNSNode node;
 		node.localTransform = glm::mat4(1.0);
-		auto& n = header["nodes"][i];
+		auto& n = m_Header["nodes"][i];
 
 		glm::mat4 translation;
 		glm::mat4 rotation;
@@ -98,19 +98,22 @@ void VRMImporter::loadNodes() {
 		if (n.contains("children")) {
 			auto& children = n["children"];
 			node.firstChild = children[0];
+		} else {
+			node.firstChild = -1;
 		}
 
 		node.localTransform = translation * rotation * scaling;
 		node.globalTransform = node.localTransform;
+		node.jointMatrix = glm::mat4(1.0);
 		node.parent = -1;
 		node.nextSibling = -1;
-		nodes.push_back(node);
+		m_Nodes.push_back(node);
 	}
 
 	// Next sibling loop
 	for (size_t i = 0; i < size; i++) {
-		auto& n = header["nodes"][i];
-		VRM::FCNSNode& parent = nodes[i];
+		auto& n = m_Header["nodes"][i];
+		VRM::FCNSNode& parent = m_Nodes[i];
 
 		if (!n.contains("children")) continue;
 		size_t childrenCount = n["children"].size();
@@ -118,13 +121,13 @@ void VRMImporter::loadNodes() {
 		// Update global transform
 		for (size_t j = 0; j < childrenCount; j++) {
 			size_t childIndex = n["children"][j];
-			VRM::FCNSNode& child = nodes[childIndex];
+			VRM::FCNSNode& child = m_Nodes[childIndex];
 			child.globalTransform = child.localTransform * parent.localTransform;
 		}
 
 		if (childrenCount == 1) {
 			size_t childIndex = n["children"][0];
-			VRM::FCNSNode& child = nodes[childIndex];
+			VRM::FCNSNode& child = m_Nodes[childIndex];
 			child.parent = i;
 			continue;
 		}
@@ -132,8 +135,8 @@ void VRMImporter::loadNodes() {
 		for (size_t j = 0; j < childrenCount - 1; j++) {
 			size_t childIndex = n["children"][j];
 			size_t siblingIndex = n["children"][j + 1];
-			VRM::FCNSNode& child = nodes[childIndex];
-			VRM::FCNSNode& sibling = nodes[siblingIndex];
+			VRM::FCNSNode& child = m_Nodes[childIndex];
+			VRM::FCNSNode& sibling = m_Nodes[siblingIndex];
 			child.parent = i;
 			sibling.parent = i;
 			child.nextSibling = siblingIndex;
@@ -142,36 +145,41 @@ void VRMImporter::loadNodes() {
 }
 
 void VRMImporter::calculateJoints() {
-	auto& accessor = header["accessors"][0];
+	auto& accessor = m_Header["accessors"][0];
 	size_t bufferViewIndex = accessor["bufferView"];
 
-	auto& bufferView = header["bufferViews"][bufferViewIndex];
+	auto& bufferView = m_Header["bufferViews"][bufferViewIndex];
 	size_t byteOffset = bufferView["byteOffset"];
-	glm::mat4* inverseBinds = reinterpret_cast<glm::mat4*>(&buffer.at(byteOffset));
+	glm::mat4* inverseBinds = reinterpret_cast<glm::mat4*>(&m_Buffer.at(byteOffset));
 
-	for (size_t i = 0; i < nodes.size(); i++) {
-		VRM::FCNSNode& node = nodes[i];
-		glm::mat4 inverseTransform = glm::inverse(node.globalTransform);
+	for (size_t i = 0; i < m_Nodes.size(); i++) {
+		VRM::FCNSNode& node = m_Nodes[i];
 
 		if (node.skin != -1) {
-			auto& joints = header["skins"][node.skin]["joints"];
+			glm::mat4 inverseTransform = glm::inverse(node.globalTransform);
+			auto& joints = m_Header["skins"][node.skin]["joints"];
 			size_t jointsCount = joints.size();
+			std::vector<glm::mat4> localJoints(jointsCount);
 
 			for (size_t j = 0; j < jointsCount; j++) {
 				size_t jointIndex = joints[j];
-				VRM::FCNSNode& joint = nodes[jointIndex];
+				VRM::FCNSNode& joint = m_Nodes[jointIndex];
 				glm::mat4 jointMat = joint.globalTransform * inverseBinds[j];
 				jointMat = inverseTransform * jointMat;
-				node.jointMatrix = jointMat;
+				joint.jointMatrix = jointMat;
+				localJoints.push_back(jointMat);
 			}
+			this->m_Joints[node.skin] = localJoints;
 		}
 	}
 }
 
 void VRMImporter::recalculateMatrices() {
-	for (size_t i = 0; i < nodes.size(); i++) {
-		VRM::FCNSNode& parent = nodes[i];
-		auto& n = header["nodes"][i];
+	for (size_t i = 0; i < m_Nodes.size(); i++) {
+		VRM::FCNSNode& parent = m_Nodes[i];
+		auto& n = m_Header["nodes"][i];
+		if (parent.parent == -1)
+			parent.globalTransform = parent.localTransform;
 
 		if (!n.contains("children")) continue;
 		size_t childrenCount = n["children"].size();
@@ -179,7 +187,7 @@ void VRMImporter::recalculateMatrices() {
 		// Update global transform
 		for (size_t j = 0; j < childrenCount; j++) {
 			size_t childIndex = n["children"][j];
-			VRM::FCNSNode& child = nodes[childIndex];
+			VRM::FCNSNode& child = m_Nodes[childIndex];
 			child.globalTransform = child.localTransform * parent.localTransform;
 		}
 	}

@@ -8,6 +8,17 @@ struct Material {
 	int baseColourTextureIndex;
 };
 
+struct FCNSNode {
+	mat4 localTransform;
+	mat4 globalTransform;
+	mat4 jointMatrix;
+	int mesh;
+	int skin;
+	int parent;
+	int firstChild;
+	int nextSibling;
+};
+
 layout(set = 0, binding = 0) uniform UniformBufferObject {
 	mat4 model;
 	mat4 view;
@@ -18,6 +29,10 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 layout(std140, set = 0, binding = 2) readonly buffer AnimBuffer {
 	vec4 anims[];
 } animBuffer;
+
+layout(std140, set = 1, binding = 1) readonly buffer NodeBuffer {
+	FCNSNode nodes[];
+} nodeBuffer;
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
@@ -35,6 +50,7 @@ layout (push_constant) uniform PushConstant {
 	int materialIndex;
 	float value;
 	int numVertices;
+	int nodeIndex;
 } constants;
 
 void main() {
@@ -43,29 +59,29 @@ void main() {
 	mat4 mv =   ubo.view * ubo.model;
 	vec3 pos = inPosition;
 
-// 	mat4 skinMat =
-// 			inWeights.x * boneBuffer.bones[inJoints.x] +
-// 			inWeights.y * boneBuffer.bones[inJoints.y] +
-// 			inWeights.z * boneBuffer.bones[inJoints.z] +
-// 			inWeights.w * boneBuffer.bones[inJoints.w];
-
-	// TODO: THIS CAUSES ISSUE
-	pos += constants.value * (animBuffer.anims[int(constants.value) * (17 * constants.numVertices + inIndex)].xzy + animBuffer.anims[int(constants.value) * (32 * constants.numVertices + inIndex)].xzy);
-
 // 	vec4 locPos;
+// 	if (constants.nodeIndex > 0) {
+// 		mat4 skinMat =
+// 			inWeights.x * nodeBuffer.nodes[inJoints.x].jointMatrix +
+// 			inWeights.y * nodeBuffer.nodes[inJoints.y].jointMatrix +
+// 			inWeights.z * nodeBuffer.nodes[inJoints.z].jointMatrix +
+// 			inWeights.w * nodeBuffer.nodes[inJoints.w].jointMatrix;
 //
-// 	locPos = ubo.model * skinMat * vec4(pos, 1.0);
-// 	locPos.y = -locPos.y;
-// 	vec3 worldPos = locPos.xyz / locPos.w;
-
-// 	vec3 posAfterBone = vec3(0);
-// 	for (int i = 0; i < 4; i++) {
-// 		mat4 boneTransform = boneBuffer.bones[inJoints[i]];
-// 		posAfterBone += (inWeights[i] * (boneTransform * vec4(pos, 1.0))).xyz;
+// 		locPos = ubo.model * nodeBuffer.nodes[constants.nodeIndex].localTransform * skinMat * vec4(pos, 1.0);
+// 		locPos.z = 0;
 // 	}
-// 	if (posAfterBone == vec3(0))
-// 		posAfterBone = pos;
- 	vec4 P = mv * vec4(pos, 1.0);
+// 	vec3 worldPos = locPos.xyz;// / locPos.w;
+
+	vec3 posAfterBone = vec3(0);
+	for (int i = 0; i < 4; i++) {
+		mat4 boneTransform = nodeBuffer.nodes[inJoints[i]].jointMatrix * nodeBuffer.nodes[constants.nodeIndex].globalTransform;
+		posAfterBone += (inWeights[i] * (boneTransform * vec4(pos, 1.0))).xyz;
+	}
+	if (posAfterBone == vec3(0))
+		posAfterBone = pos;
+
+	posAfterBone += constants.value * (animBuffer.anims[int(constants.value) * (17 * constants.numVertices + inIndex)].xzy + animBuffer.anims[int(constants.value) * (32 * constants.numVertices + inIndex)].xzy);
+ 	vec4 P = mv * vec4(posAfterBone, 1.0);
 
 	//gl_Position = ubo.proj * ubo.view * vec4(worldPos, 1.0);
 	gl_Position = ubo.proj * P;

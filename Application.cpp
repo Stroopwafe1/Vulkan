@@ -5,7 +5,7 @@ void Application::initWindow() {
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-	window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+	window = glfwCreateWindow(g_WIDTH, g_HEIGHT, "Vulkan", nullptr, nullptr);
 	glfwSetWindowUserPointer(window, this);
 	glfwSetKeyCallback(window, keyCallback);
 	glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
@@ -16,7 +16,7 @@ void Application::initVulkan() {
 	const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 	std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
-	vulkan.init(extensions, WIDTH, HEIGHT);
+	vulkan.init(extensions, g_WIDTH, g_HEIGHT);
 	createSurface();
 	loadScene();
 	vulkan.init2();
@@ -25,7 +25,7 @@ void Application::initVulkan() {
 }
 
 void Application::createSurface() {
-	if (glfwCreateWindowSurface(vulkan.instance, window, nullptr, &vulkan.surface) != VK_SUCCESS) {
+	if (glfwCreateWindowSurface(vulkan.m_Instance, window, nullptr, &vulkan.m_Surface) != VK_SUCCESS) {
 		throw std::runtime_error("[Vulkan#createSurface]: Error: Failed to create window surface!");
 	}
 }
@@ -37,7 +37,7 @@ void Application::mainLoop() {
 		_currentTime = time_now;
 
 		glfwPollEvents();
-		scene.update(vulkan.currentFrame, _keystates, _deltaTime);
+		scene.update(vulkan.m_CurrentFrame, _keystates, _deltaTime);
 		uint32_t imageIndex;
 		vulkan.beginDrawFrame(&imageIndex);
 		scene.draw();
